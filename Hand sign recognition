@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hand Sign Recognition</title>
+  <style>
+    video, canvas { position: absolute; top: 0; left: 0; }
+    #output { position: absolute; top: 10px; left: 10px; color: red; font-size: 24px; }
+  </style>
+</head>
+<body>
+  <video id="video" width="640" height="480" autoplay></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
+  <div id="output">Sign: None</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const output = document.getElementById('output');
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7,
+    });
+
+    hands.onResults(results => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+        drawLandmarks(ctx, landmarks, { color: '#FF0000', lineWidth: 1 });
+
+        // Simple logic: if index finger is up and others down → assume it's "1"
+        const isFingerUp = (tip, pip) => landmarks[tip].y < landmarks[pip].y;
+        const indexUp = isFingerUp(8, 6);
+        const middleUp = isFingerUp(12, 10);
+        const ringUp = isFingerUp(16, 14);
+        const pinkyUp = isFingerUp(20, 18);
+        const thumbUp = isFingerUp(4, 3);
+
+        let sign = "Unknown";
+        if (indexUp && !middleUp && !ringUp && !pinkyUp && !thumbUp) {
+          sign = "1";
+        } else if (indexUp && middleUp && !ringUp && !pinkyUp && !thumbUp) {
+          sign = "2";
+        } else if (!indexUp && !middleUp && !ringUp && !pinkyUp && !thumbUp) {
+          sign = "Fist";
+        }
+
+        output.textContent = `Sign: ${sign}`;
+      }
+    });
+
+    const camera = new Camera(video, {
+      onFrame: async () => {
+        await hands.send({ image: video });
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
+  </script>
+</body>
+</html>
